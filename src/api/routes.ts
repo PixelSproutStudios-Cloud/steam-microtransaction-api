@@ -1,5 +1,9 @@
 import steamController from './controllers/steam.controller';
 import { Express, RequestHandler, Router } from 'express';
+import path from 'path';
+import fs from 'fs';
+import axios from 'axios';
+import constants from '@src/constants';
 
 // Utility to handle missing fields in the request
 const handleMissingFields = (fields: string[]) => (req, res, next) => {
@@ -19,6 +23,7 @@ const validateCheckPurchaseStatus: RequestHandler = handleMissingFields([
   'orderId',
   'transId',
 ]);
+
 const validateInitPurchase: RequestHandler = handleMissingFields([
   'appId',
   'category',
@@ -224,4 +229,79 @@ export default (app: Express): void => {
   app.use((_req, res) => {
     res.status(404).send('');
   });
+  
+    /**
+     * @api {get} /GetItemPrices Get All Item Prices
+     * @apiName GetItemPrices
+     * @apiGroup Microtransaction
+     * @apiVersion  1.0.0
+     * @apiDescription Retrieve the prices of all items or a specific item if itemId is provided.
+     *
+     * @apiParam  {Number} [itemId] Optional item ID to retrieve a single item price.
+     *
+     * @apiSuccess (Response: 200) {Boolean} success Response Status
+     * @apiSuccess (Response: 200) {Array|Object} products Array of products or a single product object.
+     *
+     * @apiSuccessExample {Object} Success-Response:
+     * HTTP/1.1 200
+     * {
+     *     "success": true,
+     *     "products": [
+     *         { "id": 1001, "price": 199 },
+     *         { "id": 1002, "price": 299 },
+     *         ...
+     *     ]
+     * }
+     *
+     * @apiSuccessExample {Object} Single-Product Response:
+     * HTTP/1.1 200
+     * {
+     *     "success": true,
+     *     "product": { "id": 1001, "price": 199 }
+     * }
+     *
+     * @apiErrorExample {Object} Error-Response:
+     * HTTP/1.1 404
+     * {
+     *     "success": false,
+     *     "message": "Item not found"
+     * }
+     */
+
+      router.get('/GetItemPrices', (_req, res) => {
+    const pricesFilePath = path.join(__dirname, '../products.json');
+
+    fs.readFile(pricesFilePath, 'utf-8', (err, data) => {
+        if (err) {
+            console.error("Error reading products.json:", err);
+            return res.status(500).json({ success: false, message: 'Error retrieving prices.' });
+        }
+
+        const products = JSON.parse(data);
+
+        // Return all products if no itemId is provided
+        res.status(200).json({ success: true, products });
+    });
+});
+
+const GetAssetPrices = async (req, res) => {
+  const { appid, currency } = req.query; // Retrieve the app ID from the query
+  const apiKey = constants.webkey; // Set your Steam API key
+  const url = `https://partner.steam-api.com/ISteamEconomy/GetAssetPrices/v1/?key=${apiKey}&appid=${appid}&currency=${currency}`;
+  
+  try {
+    const response = await axios.get(url);
+    const products = response.data; // No need to parse as axios does this automatically
+     res.status(200).json({
+      success: true,
+      products
+    });
+  } catch (error) {
+   res.status(500).json({
+      error: 'Failed to fetch asset prices'
+    });
+  }
+};
+
+router.get('/GetAssetPrices', GetAssetPrices);
 };
